@@ -1,0 +1,66 @@
+# ============================================
+# 多模态决策强化学习智能内容生成与推荐系统
+# 依赖清单 (Industrial-grade)
+# ============================================
+
+# Core Deep Learning
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Transformers & Model Hub
+transformers>=4.40.0
+accelerate>=0.27.0
+peft>=0.9.0
+bitsandbytes>=0.43.0
+datasets>=2.18.0
+tokenizers>=0.15.0
+safetensors>=0.4.0
+sentencepiece>=0.2.0
+
+# Reinforcement Learning
+trl>=0.8.0
+gymnasium>=0.29.0
+stable-baselines3>=2.2.0
+
+# Vision Models
+open-clip-torch>=2.24.0
+timm>=0.9.0
+Pillow>=10.0.0
+
+# Distributed Training
+deepspeed>=0.14.0
+
+# API & Deployment
+fastapi>=0.110.0
+uvicorn>=0.27.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+
+# Data Processing
+numpy>=1.26.0
+pandas>=2.2.0
+scikit-learn>=1.4.0
+scipy>=1.12.0
+
+# Monitoring & Logging
+tensorboard>=2.16.0
+wandb>=0.16.0
+prometheus-client>=0.20.0
+loguru>=0.7.0
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0.0
+omegaconf>=2.3.0
+rich>=13.7.0
+click>=8.1.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0
+
+# Model Optimization
+onnxruntime>=1.17.0
+optimum>=1.17.0

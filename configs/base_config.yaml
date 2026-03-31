@@ -1,0 +1,154 @@
+# ============================================
+# 多模态决策强化学习系统 - 基础配置
+# ============================================
+
+project:
+  name: "mmrl-content-system"
+  version: "1.0.0"
+  seed: 42
+  device: "cuda"
+  mixed_precision: "bf16"  # bf16/fp16/fp32
+
+# ---- 数据配置 ----
+data:
+  train_data_path: "data/processed/train"
+  val_data_path: "data/processed/val"
+  test_data_path: "data/processed/test"
+  raw_data_path: "data/raw"
+  preference_data_path: "data/preference"
+  max_text_length: 512
+  image_size: 224
+  batch_size: 16
+  num_workers: 4
+  pin_memory: true
+
+# ---- 多模态模型配置 ----
+model:
+  # 视觉编码器
+  vision_encoder:
+    name: "openai/clip-vit-large-patch14"
+    hidden_size: 1024
+    freeze: true
+    freeze_layers: -1  # -1 冻结全部, 0 不冻结
+
+  # 文本编码器
+  text_encoder:
+    name: "Qwen/Qwen2-7B-Instruct"
+    hidden_size: 4096
+    max_length: 512
+
+  # 跨模态融合
+  fusion:
+    type: "cross_attention"  # cross_attention / mlp / gated
+    hidden_size: 1024
+    num_heads: 16
+    num_layers: 4
+    dropout: 0.1
+    use_gate: true
+
+  # 投影层
+  projection:
+    vision_proj_dim: 1024
+    text_proj_dim: 1024
+    shared_dim: 512
+
+# ---- SFT微调配置 ----
+sft:
+  use_lora: true
+  lora:
+    r: 16
+    alpha: 32
+    dropout: 0.05
+    target_modules: ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  use_qlora: true
+  quantization_bits: 4
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  num_epochs: 3
+  warmup_ratio: 0.1
+  gradient_accumulation_steps: 4
+  max_grad_norm: 1.0
+  save_steps: 500
+  eval_steps: 200
+  logging_steps: 50
+
+# ---- 奖励模型配置 ----
+reward_model:
+  hidden_size: 1024
+  num_reward_heads: 4  # 内容质量/用户偏好/业务合规/相关性
+  reward_weights:
+    content_quality: 0.3
+    user_preference: 0.3
+    business_compliance: 0.2
+    relevance: 0.2
+  learning_rate: 1.0e-5
+  num_epochs: 2
+  batch_size: 8
+
+# ---- DPO配置 ----
+dpo:
+  beta: 0.1
+  learning_rate: 5.0e-6
+  num_epochs: 1
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  max_grad_norm: 1.0
+  warmup_ratio: 0.1
+  label_smoothing: 0.0
+  loss_type: "sigmoid"  # sigmoid / hinge / ipo
+
+# ---- PPO配置 ----
+ppo:
+  learning_rate: 1.0e-6
+  num_epochs: 1
+  batch_size: 4
+  mini_batch_size: 2
+  gradient_accumulation_steps: 4
+  ppo_epochs: 4
+  clip_range: 0.2
+  clip_range_value: 0.2
+  vf_coef: 0.1
+  entropy_coef: 0.01
+  max_grad_norm: 0.5
+  gamma: 0.99
+  lam: 0.95
+  kl_penalty: "kl"
+  target_kl: 0.01
+  adap_kl_ctrl: true
+
+# ---- 推理与部署配置 ----
+inference:
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  do_sample: true
+  num_beams: 1
+
+deployment:
+  quantize: true
+  quantize_bits: 8  # 4 or 8
+  use_tensorrt: false
+  max_batch_size: 32
+  timeout: 10  # seconds
+  host: "0.0.0.0"
+  port: 8000
+
+# ---- 评估配置 ----
+evaluation:
+  metrics:
+    - "bleu"
+    - "rouge"
+    - "clip_score"
+    - "recall_at_k"
+    - "preference_win_rate"
+    - "reward_score"
+  recall_k: [1, 5, 10]
+  num_eval_samples: 1000
+
+# ---- 分布式训练 ----
+distributed:
+  strategy: "deepspeed"  # deepspeed / fsdp / ddp
+  deepspeed_config: "configs/deepspeed_config.json"
+  num_gpus: 1
+  gradient_checkpointing: true
