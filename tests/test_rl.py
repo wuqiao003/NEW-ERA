@@ -118,8 +118,8 @@ class TestDPOLoss:
 
     def test_sigmoid_loss(self):
         loss_fn = DPOLoss(beta=0.1, loss_type="sigmoid")
-        chosen = torch.randn(4)
-        rejected = torch.randn(4) - 1
+        chosen = torch.randn(4, requires_grad=True)
+        rejected = torch.randn(4, requires_grad=True) - 1
         ref_chosen = torch.randn(4)
         ref_rejected = torch.randn(4) - 1
 
@@ -129,8 +129,8 @@ class TestDPOLoss:
 
     def test_hinge_loss(self):
         loss_fn = DPOLoss(beta=0.1, loss_type="hinge")
-        chosen = torch.randn(4)
-        rejected = torch.randn(4)
+        chosen = torch.randn(4, requires_grad=True)
+        rejected = torch.randn(4, requires_grad=True)
         ref_chosen = torch.randn(4)
         ref_rejected = torch.randn(4)
 
@@ -139,8 +139,8 @@ class TestDPOLoss:
 
     def test_ipo_loss(self):
         loss_fn = DPOLoss(beta=0.1, loss_type="ipo")
-        chosen = torch.randn(4)
-        rejected = torch.randn(4)
+        chosen = torch.randn(4, requires_grad=True)
+        rejected = torch.randn(4, requires_grad=True)
         ref_chosen = torch.randn(4)
         ref_rejected = torch.randn(4)
 
@@ -149,15 +149,15 @@ class TestDPOLoss:
 
     def test_reference_free(self):
         loss_fn = DPOLoss(beta=0.1, reference_free=True)
-        chosen = torch.randn(4)
-        rejected = torch.randn(4)
+        chosen = torch.randn(4, requires_grad=True)
+        rejected = torch.randn(4, requires_grad=True)
         loss, metrics = loss_fn(chosen, rejected)
         assert loss.requires_grad
 
     def test_label_smoothing(self):
         loss_fn = DPOLoss(beta=0.1, label_smoothing=0.1)
-        chosen = torch.randn(4)
-        rejected = torch.randn(4)
+        chosen = torch.randn(4, requires_grad=True)
+        rejected = torch.randn(4, requires_grad=True)
         ref_chosen = torch.randn(4)
         ref_rejected = torch.randn(4)
         loss, _ = loss_fn(chosen, rejected, ref_chosen, ref_rejected)
@@ -259,9 +259,11 @@ class TestPolicyNetwork:
 
     def test_deterministic_mode(self):
         net = PolicyNetwork(input_dim=128, action_dim=64, continuous=False)
+        net.eval()
         states = torch.randn(2, 128)
-        a1, _ = net.get_action(states, deterministic=True)
-        a2, _ = net.get_action(states, deterministic=True)
+        with torch.no_grad():
+            a1, _ = net.get_action(states, deterministic=True)
+            a2, _ = net.get_action(states, deterministic=True)
         assert torch.equal(a1, a2)
 
 

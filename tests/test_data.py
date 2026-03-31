@@ -154,7 +154,7 @@ class TestMultimodalPipeline:
     def test_process_sample_with_image(self):
         from PIL import Image
         img = Image.new("RGB", (300, 300), color="green")
-        result = self.pipeline.process_sample("带图文本", image=img)
+        result = self.pipeline.process_sample("带图片的测试文本内容", image=img)
         assert result["text_valid"] is True
         assert result["image_valid"] is True
         assert result["pixel_values"].shape == (3, 224, 224)

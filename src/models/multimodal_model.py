@@ -114,13 +114,15 @@ class MultimodalBaseModel(nn.Module):
             text_feat = text_out.get("token_features", text_out["projected"])
             vision_feat = vision_out.get("patch_features", vision_out["projected"])
 
-            # 维度对齐
+            # 维度对齐：如果特征hidden_size与fusion不匹配，回退到projected特征
+            fusion_text_mask = attention_mask
             if text_feat.shape[-1] != self.fusion_module.hidden_size:
                 text_feat = text_out["projected"]
+                fusion_text_mask = None  # projected是[B,D]，mask不适用
             if vision_feat.shape[-1] != self.fusion_module.hidden_size:
                 vision_feat = vision_out["projected"]
 
-            fusion_out = self.fuse(text_feat, vision_feat, text_mask=attention_mask)
+            fusion_out = self.fuse(text_feat, vision_feat, text_mask=fusion_text_mask)
             outputs["fused_features"] = fusion_out["fused_features"]
         else:
             # 单模态

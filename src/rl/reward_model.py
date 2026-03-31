@@ -82,6 +82,8 @@ class MultimodalRewardModel(nn.Module):
         super().__init__()
         self.multimodal_dim = multimodal_dim
         self.hidden_size = hidden_size
+        self.user_feature_dim = user_feature_dim
+        self.business_feature_dim = business_feature_dim
 
         # 默认奖励权重
         self.reward_weights = reward_weights or {
@@ -154,12 +156,12 @@ class MultimodalRewardModel(nn.Module):
 
         # 编码用户特征（不存在则用零向量）
         if user_features is None:
-            user_features = torch.zeros(B, 64, device=device)
+            user_features = torch.zeros(B, self.user_feature_dim, device=device)
         user_encoded = self.user_encoder(user_features)
 
         # 编码业务特征
         if business_features is None:
-            business_features = torch.zeros(B, 32, device=device)
+            business_features = torch.zeros(B, self.business_feature_dim, device=device)
         business_encoded = self.business_encoder(business_features)
 
         # 特征融合

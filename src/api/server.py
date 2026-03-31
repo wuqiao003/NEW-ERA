@@ -78,6 +78,9 @@ class ModelService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
+            cls._instance.model_loaded = False
+            cls._instance.device = "unknown"
+            cls._instance.start_time = time.time()
         return cls._instance
 
     def initialize(self):

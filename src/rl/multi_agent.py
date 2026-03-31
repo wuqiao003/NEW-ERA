@@ -172,8 +172,13 @@ class AgentCommunication(nn.Module):
 
     def __init__(self, state_dim: int, hidden_dim: int):
         super().__init__()
+        self.state_dim = state_dim
+
+        # 发送信号投影层（将任意维度投影到state_dim）
+        self.signal_proj = None  # 延迟初始化
+
         self.gate = nn.Sequential(
-            nn.Linear(state_dim * 2, hidden_dim),
+            nn.Linear(state_dim * 2, state_dim),
             nn.Sigmoid(),
         )
         self.transform = nn.Sequential(
@@ -181,6 +186,15 @@ class AgentCommunication(nn.Module):
             nn.GELU(),
             nn.LayerNorm(state_dim),
         )
+
+    def _get_signal_proj(self, input_dim: int, device: torch.device) -> nn.Module:
+        """延迟创建投影层"""
+        if self.signal_proj is None or self.signal_proj[0].in_features != input_dim:
+            self.signal_proj = nn.Sequential(
+                nn.Linear(input_dim, self.state_dim),
+                nn.GELU(),
+            ).to(device)
+        return self.signal_proj
 
     def forward(
         self,
@@ -190,10 +204,8 @@ class AgentCommunication(nn.Module):
     ) -> torch.Tensor:
         # 将sender_signal投影到与receiver_state相同维度
         if sender_signal.shape[-1] != receiver_state.shape[-1]:
-            # 简单均值池化对齐
-            sender_signal = F.adaptive_avg_pool1d(
-                sender_signal.unsqueeze(1), receiver_state.shape[-1]
-            ).squeeze(1)
+            proj = self._get_signal_proj(sender_signal.shape[-1], sender_signal.device)
+            sender_signal = proj(sender_signal)
 
         combined = torch.cat([receiver_state, sender_signal], dim=-1)
         gate = self.gate(combined)
