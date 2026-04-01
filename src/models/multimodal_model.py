@@ -178,7 +178,9 @@ class MultimodalBaseModel(nn.Module):
             if scores is not None:
                 return F.binary_cross_entropy_with_logits(scores, labels.float())
 
-        return torch.tensor(0.0)
+        # 回退：生成与模型参数关联的零损失，保持计算图连通
+        dummy_loss = sum(p.sum() * 0.0 for p in self.parameters() if p.requires_grad)
+        return dummy_loss
 
     def _contrastive_loss(
         self,

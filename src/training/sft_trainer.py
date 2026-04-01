@@ -199,7 +199,11 @@ class SFTTrainer:
                 task=self.task,
                 labels=labels,
             )
-            loss = outputs.get("loss", torch.tensor(0.0, device=self.device))
+            loss = outputs.get("loss")
+            if loss is None:
+                logger.warning("⚠️ 模型未返回loss，跳过本步")
+                self.global_step += 1
+                return 0.0
             loss = loss / self.gradient_accumulation_steps
 
         # 反向传播
