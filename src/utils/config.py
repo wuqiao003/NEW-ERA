@@ -103,11 +103,21 @@ def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None):
     """配置日志系统"""
     import sys
     logger.remove()
+
+    # Windows 终端 GBK 编码下无法输出 emoji，使用 utf-8 安全输出
+    sink = sys.stderr
+    try:
+        import io
+        if hasattr(sys.stderr, "buffer"):
+            sink = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     logger.add(
-        sys.stderr,
+        sink,
         level=log_level,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     )
     if log_file:
-        logger.add(log_file, rotation="100 MB", retention="30 days", level=log_level)
+        logger.add(log_file, rotation="100 MB", retention="30 days", level=log_level, encoding="utf-8")
     logger.info(f"📋 日志系统初始化完成, 级别: {log_level}")

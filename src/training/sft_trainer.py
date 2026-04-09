@@ -50,7 +50,8 @@ class SFTTrainer:
         self.logging_steps = logging_steps
         self.output_dir = Path(output_dir)
         self.device = device
-        self.use_amp = use_amp
+        # CPU 环境下禁用 CUDA AMP（避免 autocast 警告）
+        self.use_amp = use_amp and (device != "cpu") and torch.cuda.is_available()
         self.task = task
         self.early_stopping_patience = early_stopping_patience
 
@@ -71,7 +72,7 @@ class SFTTrainer:
         self.scheduler = self._create_scheduler(warmup_steps, total_steps)
 
         # 混合精度
-        self.scaler = torch.amp.GradScaler("cuda", enabled=use_amp and device == "cuda")
+        self.scaler = torch.amp.GradScaler("cuda", enabled=self.use_amp)
 
         # 训练状态
         self.global_step = 0

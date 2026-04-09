@@ -258,6 +258,10 @@ def create_dataloader(
     drop_last: bool = False,
 ) -> DataLoader:
     """创建标准DataLoader"""
+    # CPU 环境下禁用 pin_memory
+    if pin_memory and not torch.cuda.is_available():
+        pin_memory = False
+
     return DataLoader(
         dataset,
         batch_size=batch_size,

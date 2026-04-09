@@ -227,3 +227,269 @@ class TestEndToEndPipeline:
         assert len(result["texts"]) == 3
         # HTML应被清理
         assert "<b>" not in result["texts"][0]
+
+
+class TestEcommerceEndToEnd:
+    """电商场景端到端集成测试"""
+
+    def setup_method(self):
+        self.config = {
+            "model": {
+                "vision_encoder": {"name": "default", "hidden_size": 128},
+                "text_encoder": {"name": "default", "hidden_size": 128, "max_length": 64},
+                "fusion": {
+                    "type": "cross_attention", "hidden_size": 64,
+                    "num_heads": 4, "num_layers": 1,
+                    "dropout": 0.1, "use_gate": True,
+                },
+                "projection": {"shared_dim": 64},
+            }
+        }
+
+    def test_ecommerce_dataset_to_model(self):
+        """电商数据集 → 模型前向"""
+        from src.data.ecommerce_dataset import (
+            EcommerceProductDataset,
+            create_ecommerce_dataloader,
+        )
+        from src.models.multimodal_model import MultimodalBaseModel
+
+        dataset = EcommerceProductDataset(
+            data_path="data/ecommerce_test",
+            max_text_length=64, image_size=224, split="train",
+        )
+        loader = create_ecommerce_dataloader(dataset, batch_size=4, num_workers=0)
+        model = MultimodalBaseModel(self.config)
+        model.eval()
+
+        batch = next(iter(loader))
+        pixels = batch["pixel_values"]
+
+        with torch.no_grad():
+            out = model(pixel_values=pixels, task="matching")
+
+        assert "vision_features" in out
+        assert out["vision_features"].shape[0] == 4
+
+    def test_copy_generation_engine_pipeline(self):
+        """文案生成引擎端到端: 商品信息 → 多风格文案"""
+        from src.generation.copy_engine import CopyGenerationEngine
+
+        engine = CopyGenerationEngine(
+            multimodal_model=None,
+            use_model=False,
+            device="cpu",
+        )
+
+        results = engine.generate_multi_style_copies(
+            product_title="清爽防晒霜SPF50+",
+            product_description="轻薄不油腻，长效防晒12小时",
+            category="美妆",
+            tags=["防晒", "清爽"],
+            price=119.0,
+            styles=["种草", "促销", "简约"],
+            num_candidates=2,
+        )
+
+        assert "种草" in results
+        assert "促销" in results
+        assert "简约" in results
+        assert len(results["种草"]) == 2
+        for copy in results["种草"]:
+            assert "content" in copy
+            assert "score" in copy
+            assert len(copy["content"]) > 10
+
+    def test_copy_generation_with_model(self):
+        """带模型的文案生成引擎"""
+        from src.models.multimodal_model import MultimodalBaseModel
+        from src.generation.copy_engine import CopyGenerationEngine
+
+        model = MultimodalBaseModel(self.config)
+        engine = CopyGenerationEngine(
+            multimodal_model=model,
+            use_model=True,
+            device="cpu",
+        )
+
+        results = engine.generate_multi_style_copies(
+            product_title="蓝牙耳机Pro",
+            pixel_values=torch.randn(3, 224, 224),
+            styles=["种草"],
+            num_candidates=1,
+        )
+        assert "种草" in results
+        assert len(results["种草"]) >= 1
+
+    def test_copy_quality_evaluator_integration(self):
+        """文案质量评估器端到端"""
+        from src.models.copy_generator import CopyQualityEvaluator
+
+        evaluator = CopyQualityEvaluator()
+
+        # 测试多种风格的文案
+        test_cases = [
+            ("姐妹们这个防晒真的绝了！安利给大家，用了一周效果太好了！推荐！", "种草"),
+            ("🔥限时秒杀！原价199今日到手仅99！手慢无！", "促销"),
+            ("防晒霜 | SPF50+ PA++++ | ¥89", "简约"),
+        ]
+
+        for text, style in test_cases:
+            scores = evaluator.evaluate_copy(text, style)
+            assert "overall" in scores
+            assert 0.0 <= scores["overall"] <= 1.0
+
+    def test_copy_ranker_integration(self):
+        """文案排序器端到端"""
+        from src.generation.copy_engine import CopyRanker
+
+        ranker = CopyRanker()
+
+        copies = [
+            {"content": "文案A种草风格", "score": 0.8, "style": "种草"},
+            {"content": "文案B促销风格", "score": 0.9, "style": "促销"},
+            {"content": "文案C种草风格", "score": 0.85, "style": "种草"},
+            {"content": "文案D简约风格", "score": 0.7, "style": "简约"},
+        ]
+
+        ranked = ranker.rank_copies(copies, diversity_weight=0.3)
+        assert len(ranked) == 4
+        assert ranked[0]["rank"] == 1
+        # 验证排名连续
+        for i, c in enumerate(ranked):
+            assert c["rank"] == i + 1
+
+    def test_vector_store_integration(self):
+        """向量检索引擎端到端"""
+        import numpy as np
+        from src.data.vector_store import ProductVectorStore
+
+        store = ProductVectorStore(dim=64, index_type="Flat")
+
+        # 批量添加
+        ids = [f"P{i:04d}" for i in range(20)]
+        vectors = np.random.randn(20, 64).astype(np.float32)
+        metadata = [
+            {"title": f"商品{i}", "category": ["美妆", "数码"][i % 2], "price": 50 + i * 10}
+            for i in range(20)
+        ]
+        store.batch_add(ids, vectors, metadata)
+        assert len(store) == 20
+
+        # 搜索
+        query = np.random.randn(64).astype(np.float32)
+        results = store.search(query, top_k=5)
+        assert len(results) == 5
+        for r in results:
+            assert "product_id" in r
+            assert "score" in r
+            assert "metadata" in r
+
+    def test_vector_store_category_filter(self):
+        """向量检索 — 类目过滤"""
+        import numpy as np
+        from src.data.vector_store import ProductVectorStore
+
+        store = ProductVectorStore(dim=32, index_type="Flat")
+
+        ids = [f"P{i:04d}" for i in range(10)]
+        vectors = np.random.randn(10, 32).astype(np.float32)
+        metadata = [
+            {"category": "美妆" if i < 5 else "数码", "price": 100.0}
+            for i in range(10)
+        ]
+        store.batch_add(ids, vectors, metadata)
+
+        query = np.random.randn(32).astype(np.float32)
+        results = store.search(query, top_k=10, category_filter="美妆")
+        for r in results:
+            assert r["metadata"]["category"] == "美妆"
+
+    def test_vector_store_save_load(self, tmp_path):
+        """向量索引持久化"""
+        import numpy as np
+        from src.data.vector_store import ProductVectorStore
+
+        store = ProductVectorStore(dim=32, index_type="Flat")
+        ids = ["P001", "P002", "P003"]
+        vectors = np.random.randn(3, 32).astype(np.float32)
+        store.batch_add(ids, vectors, [{"title": f"商品{i}"} for i in range(3)])
+
+        # 保存
+        save_path = str(tmp_path / "index")
+        store.save(save_path)
+
+        # 加载
+        store2 = ProductVectorStore(dim=32, index_type="Flat")
+        store2.load(save_path)
+        assert len(store2) == 3
+        assert store2.get_product_info("P001") is not None
+
+    def test_preference_dataset_to_reward_model(self):
+        """偏好数据 → 奖励模型评分"""
+        from src.data.ecommerce_dataset import CopyPreferenceDataset
+        from src.rl.reward_model import MultimodalRewardModel
+        from src.models.multimodal_model import MultimodalBaseModel
+
+        dataset = CopyPreferenceDataset(
+            data_path="data/ecommerce_test",
+            max_length=64,
+            split="train",
+        )
+
+        model = MultimodalBaseModel(self.config)
+        reward_model = MultimodalRewardModel(multimodal_dim=64, hidden_size=128)
+
+        model.eval()
+        reward_model.eval()
+
+        pair = dataset[0]
+        pixels = pair["pixel_values"].unsqueeze(0)
+
+        with torch.no_grad():
+            features = model(pixel_values=pixels, task="matching")
+            vision_feat = features["vision_features"]
+            rewards = reward_model(vision_feat)
+
+        assert "total_reward" in rewards
+        assert rewards["total_reward"].shape == (1,)
+
+    def test_full_ecommerce_pipeline(self):
+        """完整电商流水线: 数据 → 特征 → 文案生成 → 评估"""
+        from src.data.ecommerce_dataset import EcommerceProductDataset
+        from src.models.multimodal_model import MultimodalBaseModel
+        from src.generation.copy_engine import CopyGenerationEngine
+        from src.models.copy_generator import CopyQualityEvaluator
+
+        # 1. 加载数据
+        dataset = EcommerceProductDataset(
+            data_path="data/ecommerce_test",
+            max_text_length=64, image_size=224, split="train",
+        )
+        sample = dataset[0]
+
+        # 2. 模型特征提取
+        model = MultimodalBaseModel(self.config)
+        model.eval()
+
+        pixels = sample["pixel_values"].unsqueeze(0)
+        with torch.no_grad():
+            out = model(pixel_values=pixels, task="generation")
+
+        assert "vision_features" in out or "fused_features" in out
+
+        # 3. 文案生成
+        engine = CopyGenerationEngine(use_model=False, device="cpu")
+        copies = engine.generate_multi_style_copies(
+            product_title=sample.get("text", "测试商品")[:20],
+            styles=["种草", "简约"],
+            num_candidates=1,
+        )
+        assert len(copies) >= 1
+
+        # 4. 质量评估
+        evaluator = CopyQualityEvaluator()
+        for style, style_copies in copies.items():
+            for c in style_copies:
+                scores = evaluator.evaluate_copy(c["content"], style)
+                assert 0.0 <= scores["overall"] <= 1.0

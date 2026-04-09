@@ -152,3 +152,32 @@ distributed:
   deepspeed_config: "configs/deepspeed_config.json"
   num_gpus: 1
   gradient_checkpointing: true
+
+# ============================================
+# 电商场景A配置 — 图文内容生成与推荐
+# ============================================
+ecommerce:
+  enabled: true
+  data_path: "data/ecommerce"
+  image_dir: "data/ecommerce/images"
+
+  # 文案生成配置
+  copy_generation:
+    styles: ["种草", "促销", "情感", "专业", "简约"]
+    num_candidates_per_style: 3
+    default_style: "种草"
+
+  # 向量检索配置
+  vector_store:
+    dim: 512
+    index_type: "Flat"     # Flat / IVFFlat / HNSW
+    nlist: 100
+    nprobe: 10
+    index_path: "outputs/vector_index"
+
+  # 示例数据生成
+  demo_data:
+    num_products: 200
+    num_preference_pairs: 500
+    num_user_behaviors: 5000
+    categories: ["美妆", "数码", "食品", "服饰", "家居"]
